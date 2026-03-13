@@ -6,7 +6,7 @@ class PaymentService {
     async createCheckoutSession(userEmail, redirectUrl) {
         const successUrlBase = process.env.CLIENT_URL ||
             (process.env.NODE_ENV === 'production'
-                ? 'https://assignment11-2-k4anmy2lj-reazul-islam02s-projects.vercel.app'
+                ? 'https://digital-life-lessons01.netlify.app'
                 : 'http://localhost:5173');
 
         return await stripe.checkout.sessions.create({
