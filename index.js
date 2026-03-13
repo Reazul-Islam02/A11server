@@ -1,12 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose');
 const path = require('path');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const errorHandler = require('./utils/errorHandler');
 const AppError = require('./utils/appError');
+const { connectDb, getDbConnectionState } = require('./utils/connectDb');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
@@ -29,7 +29,13 @@ app.use(cors({
     origin: (origin, callback) => {
         const allowedOrigins = [
             'http://localhost:5173',
-            'https://digital-life-lessons01.netlify.app/'
+            'http://localhost:5174',
+            'http://localhost:5175',
+            'https://assignment11-2.netlify.app',
+            'https://assignment11-2-k4anmy2lj-reazul-islam02s-projects.vercel.app',
+            'https://digital-life-lessons-f2ob.vercel.app',
+            'https://zesty-medovik-503861.netlify.app',
+            'https://digital-life-lessons01.netlify.app'
         ];
         const normalizedOrigin = origin?.replace(/\/$/, '');
         // Allow requests with no origin (e.g., mobile apps, Postman)
@@ -81,6 +87,50 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 // JSON body parser
 app.use(express.json({ limit: '10kb' }));
 
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'success',
+        data: {
+            service: 'digital-life-lessons-server',
+            vercel: Boolean(process.env.VERCEL),
+            hasMongoUri: Boolean(process.env.MONGODB_URI),
+            db: getDbConnectionState()
+        }
+    });
+});
+
+app.get('/api/health/db', async (req, res, next) => {
+    try {
+        await connectDb();
+        res.status(200).json({
+            status: 'success',
+            data: {
+                connected: true,
+                db: getDbConnectionState()
+            }
+        });
+    } catch (error) {
+        res.status(503).json({
+            status: 'error',
+            message: 'Database connection failed',
+            data: {
+                connected: false,
+                hasMongoUri: Boolean(process.env.MONGODB_URI),
+                db: getDbConnectionState()
+            }
+        });
+    }
+});
+
+app.use('/api', async (req, res, next) => {
+    try {
+        await connectDb();
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
 // Routes
 const authRoutes = require('./routes/auth');
 const lessonRoutes = require('./routes/lessons');
@@ -104,16 +154,14 @@ app.all('/{*path}', (req, res, next) => {
 // Global Error Handler
 app.use(errorHandler);
 
-// MongoDB Connection
-const uri = process.env.MONGODB_URI;
-if (uri) {
-    mongoose.connect(uri)
-        .then(() => console.log('MongoDB connection established successfully'))
+if (!process.env.VERCEL) {
+    connectDb()
+        .then(() => {
+            app.listen(port, () => {
+                console.log(`Server is running on port: ${port}`);
+            });
+        })
         .catch(err => console.error('MongoDB connection error:', err));
-} else {
-    console.warn("MONGODB_URI not found in .env");
 }
 
-app.listen(port, () => {
-    console.log(`Server is running on port: ${port}`);
-});
+module.exports = app;
